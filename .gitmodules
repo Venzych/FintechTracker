@@ -1,0 +1,6 @@
+[submodule "frontend"]
+	path = frontend
+	url = https://github.com/Venzych/FintechTracker.Frontend
+[submodule "backend"]
+	path = backend
+	url = https://github.com/Venzych/FintechTracker.Backend

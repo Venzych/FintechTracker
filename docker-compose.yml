@@ -1,0 +1,87 @@
+version: "3.9"
+
+services:
+  # PostgreSQL должен запускаться первым
+  postgres:
+    container_name: fintechtracker_postgres
+    image: postgres:17
+    environment:
+      POSTGRES_DB: fintech_tracker
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: catmeow
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - fintech-network
+
+  # Бекенд сервис
+  backend:
+    container_name: fintechtracker_api
+    image: ${DOCKER_REGISTRY-}fintechtrackerapi
+    build:
+      context: ./backend/FintechTracker
+      dockerfile: FintechTracker.API/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "62134:8080"
+      - "62135:8081"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=fintech_tracker;Username=postgres;Password=catmeow
+      - DOTNET_URLS=http://*:8080 
+    networks:
+      - fintech-network
+
+  # Фронтенд сервис
+  frontend:
+    container_name: fintechtracker_frontend
+    build:
+      context: ./frontend/fintechtracker
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_BACKEND_URL=http://backend:8080  # Прямой URL для SSR
+    volumes:
+      - ./frontend/fintechtracker:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fintech-network
+
+  # Nginx прокси
+  nginx:
+    container_name: fintechtracker_nginx
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - fintech-network
+
+volumes:
+  postgres-data:
+
+networks:
+  fintech-network:
+    driver: bridge
